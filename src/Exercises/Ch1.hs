@@ -1,7 +1,6 @@
 module Exercises.Ch1 where
 
 import Control.Monad.State
-import Control.Monad (foldM, void)
 import Data.Function (on)
 
 type ID = String
