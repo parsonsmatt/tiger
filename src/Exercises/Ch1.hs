@@ -1,5 +1,6 @@
 module Exercises.Ch1 where
 
+import Control.Monad.State
 import Control.Monad (foldM, void)
 import Data.Function (on)
 
@@ -71,37 +72,30 @@ maxArgsExpr (NumExp _) = 0
 -- >>> interp (PrintStm [NumExp 2])
 -- 2
 interp :: Stm -> IO ()
-interp stm = void $ interpStm stm []
+interp stm = void $ runStateT (interpStm stm) []
 
 type Table = [(ID, Int)]
 
-interpStm :: Stm -> Table -> IO Table
-interpStm (AssignStm i expr) tb = do
-    (val, newTable) <- interpExp expr tb
-    return $ (i, val) : newTable
-interpStm (CompoundStm a b) t =
-    interpStm a t >>= interpStm b
-interpStm (PrintStm es) t = foldM f t es
+interpStm :: Stm -> StateT Table IO Table
+interpStm (AssignStm i expr) = do
+    val <- interpExp expr
+    modify ((i, val) :)
+    get
+interpStm (CompoundStm a b) =
+    interpStm a >> interpStm b
+interpStm (PrintStm es) = mapM_ f es >> get
     where
-        f table expr = do
-            (val, table') <- interpExp expr table
-            print val
-            return table'
+        f expr = interpExp expr >>= liftIO . print
 
 
-interpExp :: Expr -> Table -> IO (Int, Table)
-interpExp (IdExp i) tb = return (iexpFromJust $ lookup i tb, tb)
+interpExp :: Expr -> StateT Table IO Int
+interpExp (IdExp i) = gets (iexpFromJust . lookup i)
     where
         iexpFromJust (Just a) = a
         iexpFromJust Nothing = error "ahh bitten by dangersss"
-interpExp (NumExp i) tb = return (i, tb)
-interpExp (OpExp a op b) tb = do
-    (v1, tb') <- interpExp a tb
-    (v2, tb'') <- interpExp b tb'
-    return (perform op v1 v2, tb'')
-interpExp (EseqExp stm expr) tb = do
-    tb' <- interpStm stm tb
-    interpExp expr tb'
+interpExp (NumExp i) = return i
+interpExp (OpExp a op b) = perform op <$> interpExp a <*> interpExp b
+interpExp (EseqExp stm expr) = interpStm stm >> interpExp expr
 
 perform :: Binop -> Int -> Int -> Int
 perform Plus = (+)
