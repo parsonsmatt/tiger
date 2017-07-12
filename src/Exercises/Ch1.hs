@@ -1,7 +1,7 @@
 module Exercises.Ch1 where
 
-import Control.Monad.State
-import Data.Function (on)
+import           Control.Monad.State
+import           Data.Function       (on)
 
 type ID = String
 
@@ -46,8 +46,8 @@ prog =
 -- 2
 maxargs :: Stm -> Int
 maxargs (CompoundStm a b) = (max `on` maxargs) a b
-maxargs (AssignStm _ e) = maxArgsExpr e
-maxargs (PrintStm exprs) = maximum (length exprs : map maxArgsExpr exprs)
+maxargs (AssignStm _ e)   = maxArgsExpr e
+maxargs (PrintStm exprs)  = maximum (length exprs : map maxArgsExpr exprs)
 
 -- | A helper function for maxargs. Finds the maximum number of arguments
 -- in print statements embedded in expressions.
@@ -57,10 +57,10 @@ maxargs (PrintStm exprs) = maximum (length exprs : map maxArgsExpr exprs)
 -- >>> maxArgsExpr (EseqExp (PrintStm [IdExp "a"]) (IdExp "b"))
 -- 1
 maxArgsExpr :: Expr -> Int
-maxArgsExpr (IdExp _) = 0
-maxArgsExpr (OpExp a _ b) = (max `on` maxArgsExpr) a b
+maxArgsExpr (IdExp _)          = 0
+maxArgsExpr (OpExp a _ b)      = (max `on` maxArgsExpr) a b
 maxArgsExpr (EseqExp stm expr) = max (maxargs stm) (maxArgsExpr expr)
-maxArgsExpr (NumExp _) = 0
+maxArgsExpr (NumExp _)         = 0
 
 
 -- | 2. Write a function that interprets a program in this language. To
@@ -91,15 +91,15 @@ interpExp :: Expr -> StateT Table IO Int
 interpExp (IdExp i) = gets (iexpFromJust . lookup i)
     where
         iexpFromJust (Just a) = a
-        iexpFromJust Nothing = error "ahh bitten by dangersss"
+        iexpFromJust Nothing  = error "ahh bitten by dangersss"
 interpExp (NumExp i) = return i
 interpExp (OpExp a op b) = perform op <$> interpExp a <*> interpExp b
 interpExp (EseqExp stm expr) = interpStm stm >> interpExp expr
 
 perform :: Binop -> Int -> Int -> Int
-perform Plus = (+)
+perform Plus  = (+)
 perform Minus = (-)
-perform Div = div
+perform Div   = div
 perform Times = (*)
 
 -- | 1.1: Given the following persistent binary search tree,
@@ -118,14 +118,14 @@ insert a (Node l k r) =
     case a `compare` k of
          LT -> Node (insert a l) k r
          EQ -> Node l a r
-         GT ->Node l k (insert a r)
+         GT -> Node l k (insert a r)
 
 -- | 1.1a: Implememt a `member` function that returns `true` if the item is
 -- found, else false.
 --
 -- >>> member 'a' Leaf
 -- False
--- >>> member 'a' Node (Node Leaf 'a' Leaf) 'b' Leaf
+-- >>> member 'a' (Node (Node Leaf 'a' Leaf) 'b' Leaf)
 -- True
 member :: Ord a => a -> Tree a -> Bool
 member _ Leaf = False
