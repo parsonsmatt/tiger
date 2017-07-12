@@ -1,0 +1,46 @@
+name: tiger
+version: 0.1.0.0
+synopsis: Implementation of the Tiger language from Appel's compiler book
+description: Please see README.md
+category: Compiler
+author: Matthew Parsons
+maintainer: parsonsmatt@gmail.com
+copyright: Matt Parsons
+license: BSD3
+github: parsonsmatt/tiger
+homepage: http://github.com/parsonsmatt/tiger
+
+extra-source-files:
+- README.md
+
+dependencies:
+  - base >=4.7 && <5
+  - mtl
+  - lens
+  - transformers
+
+library:
+  source-dirs: src
+  ghc-options: -Wall -Werror
+
+tests:
+  doctest:
+    main: DocTest.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - doctest
+    - Glob
+    - QuickCheck
+    - hspec
+  spec:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options: -Wall
+    dependencies:
+    - tiger
+    - hspec
+    - QuickCheck
