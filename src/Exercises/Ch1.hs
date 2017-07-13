@@ -134,3 +134,9 @@ member a (Node l k r) =
          LT -> member a l
          EQ -> True
          GT -> member a r
+
+-- | 1.1d: Research balanced search trees. Recommend one that rebalances on
+-- lookup, not update.
+--
+-- There's a red-black tree that's 100% type safe to implement via GADTs in
+-- Haskell. I'm not going to implement it here.
