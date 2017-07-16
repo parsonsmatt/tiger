@@ -12,6 +12,7 @@ homepage: http://github.com/parsonsmatt/tiger
 
 extra-source-files:
 - README.md
+- src/Exercises/Ch2/TigerScanner.x
 
 dependencies:
   - base >=4.7 && <5
@@ -22,6 +23,9 @@ dependencies:
 library:
   source-dirs: src
   ghc-options: -Wall -Werror
+  build-tools:
+    - alex
+    - happy
 
 tests:
   doctest:
