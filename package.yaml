@@ -17,13 +17,14 @@ extra-source-files:
 dependencies:
   - base >=4.7 && <5
   - mtl
+  - bytestring
   - lens
   - array
   - transformers
 
 library:
   source-dirs: src
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   build-tools:
     - alex
     - happy

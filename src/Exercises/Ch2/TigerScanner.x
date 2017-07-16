@@ -1,8 +1,10 @@
 {
 module Exercises.Ch2.TigerScanner (main) where
+
+import qualified Data.ByteString.Lazy.Char8 as C8
 }
 
-%wrapper "basic"
+%wrapper "posn-bytestring"
 
 $digit = 0-9                      -- digits
 $alpha = [a-zA-Z]                -- alphabetic characters
@@ -11,56 +13,56 @@ tokens :-
 
   $white+                       ;
   "//".*                        ;
-  let                           { \_ -> Let             }
-  in                            { \_ -> In              }
-  while                         { \_ -> While           }
-  for                           { \_ -> For             }
-  to                            { \_ -> To              }
-  break                         { \_ -> Break           }
-  end                           { \_ -> End             }
-  function                      { \_ -> Function        }
-  var                           { \_ -> Var             }
-  type                          { \_ -> Type            }
-  array                         { \_ -> Array           }
-  if                            { \_ -> If              }
-  then                          { \_ -> Then            }
-  else                          { \_ -> Else            }
-  do                            { \_ -> Do              }
-  of                            { \_ -> Of              }
-  nil                           { \_ -> Nil             }
-  \,                            { \_ -> Comma           }
-  \:                            { \_ -> Colon           }
-  \(                            { \_ -> OpenParen       }
-  \)                            { \_ -> CloseParen      }
-  \[                            { \_ -> OpenBrace       }
-  \]                            { \_ -> CloseBrace      }
-  \{                            { \_ -> OpenBracket     }
-  \}                            { \_ -> CloseBracket    }
-  \.                            { \_ -> Period          }
-  \+                            { \_ -> PlusSym         }
-  \*                            { \_ -> MulSym          }
-  \-                            { \_ -> SubSym          }
-  \/                            { \_ -> ForwardSlash    }
-  \=                            { \_ -> EqualSym        }
-  \<\>                          { \_ -> NotEqSym        }
-  \<                            { \_ -> LessThan        }
-  \>                            { \_ -> GreaterThan     }
-  \>\=                          { \_ -> AtLeast         }
-  \<\=                          { \_ -> AtMost          }
-  \&                            { \_ -> Ampersand       }
-  \|                            { \_ -> Pipe            }
-  \:\=                          { \_ -> Assignment      }
-  $digit+                       { \s -> LitInt (read s) }
-  $alpha [$alpha $digit \_ \']* { \s -> Ident s         }
+  let                           { \p _ -> T p Let             }
+  in                            { \p _ -> T p In              }
+  while                         { \p _ -> T p While           }
+  for                           { \p _ -> T p For             }
+  to                            { \p _ -> T p To              }
+  break                         { \p _ -> T p Break           }
+  end                           { \p _ -> T p End             }
+  function                      { \p _ -> T p Function        }
+  var                           { \p _ -> T p Var             }
+  type                          { \p _ -> T p Type            }
+  array                         { \p _ -> T p Array           }
+  if                            { \p _ -> T p If              }
+  then                          { \p _ -> T p Then            }
+  else                          { \p _ -> T p Else            }
+  do                            { \p _ -> T p Do              }
+  of                            { \p _ -> T p Of              }
+  nil                           { \p _ -> T p Nil             }
+  \,                            { \p _ -> T p Comma           }
+  \:                            { \p _ -> T p Colon           }
+  \(                            { \p _ -> T p OpenParen       }
+  \)                            { \p _ -> T p CloseParen      }
+  \[                            { \p _ -> T p OpenBrace       }
+  \]                            { \p _ -> T p CloseBrace      }
+  \{                            { \p _ -> T p OpenBracket     }
+  \}                            { \p _ -> T p CloseBracket    }
+  \.                            { \p _ -> T p Period          }
+  \+                            { \p _ -> T p PlusSym         }
+  \*                            { \p _ -> T p MulSym          }
+  \-                            { \p _ -> T p SubSym          }
+  \/                            { \p _ -> T p ForwardSlash    }
+  \=                            { \p _ -> T p EqualSym        }
+  \<\>                          { \p _ -> T p NotEqSym        }
+  \<                            { \p _ -> T p LessThan        }
+  \>                            { \p _ -> T p GreaterThan     }
+  \>\=                          { \p _ -> T p AtLeast         }
+  \<\=                          { \p _ -> T p AtMost          }
+  \&                            { \p _ -> T p Ampersand       }
+  \|                            { \p _ -> T p Pipe            }
+  \:\=                          { \p _ -> T p Assignment      }
+  $digit+                       { \p s -> T p (LitInt (read (C8.unpack s))) }
+  $alpha [$alpha $digit \_ \']* { \p s -> T p (Ident s)         }
+  "\"".*"\""                    { \p s -> T p (LitStr s) }
 
 {
--- Each action has type :: String -> Token
 
 -- The token type:
-data Token
+data TokenTy
     = LitInt Int
-    | LitStr String
-    | Ident String
+    | LitStr ByteString.ByteString
+    | Ident  ByteString.ByteString
     | While
     | For
     | To
@@ -102,7 +104,10 @@ data Token
     | Assignment
     deriving (Eq, Show)
 
+data Token = T AlexPosn TokenTy
+    deriving (Eq, Show)
+
 main = do
   s <- getContents
-  print (alexScanTokens s)
+  print (alexScanTokens (C8.pack s))
 }
