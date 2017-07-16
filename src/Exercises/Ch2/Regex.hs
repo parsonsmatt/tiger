@@ -11,7 +11,6 @@ import           Control.Applicative
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Foldable        (asum)
-import           Data.Maybe           (listToMaybe)
 
 data Regex a
     = Epsilon
@@ -23,10 +22,12 @@ data Regex a
 
 instance Applicative Regex where
     pure = Char
-    Char f <*> r = f <$> r
-    Epsilon <*> _ = Epsilon
     r1 <*> r2 =
         case r1 of
+            Epsilon ->
+                Epsilon
+            Char f ->
+                f <$> r2
             a :.: b ->
                 (a <*> r2) :.: (b <*> r2)
             a :|: b ->
@@ -46,7 +47,7 @@ renderRegex = \case
     a :|: b -> mconcat ["(", renderRegex a, "|", renderRegex b, ")"]
     Star r -> renderRegex r ++ "*"
 
-simplify :: Regex a -> Regex a
+simplify :: Eq a => Regex a -> Regex a
 simplify = \case
     -- leaves
     Epsilon -> Epsilon
@@ -58,6 +59,19 @@ simplify = \case
     Epsilon :|: r -> simplify r
     r :|: Epsilon -> simplify r
 
+    -- distribution
+    (a :.: b) :|: (c :.: d) ->
+        let a' = simplify a
+            b' = simplify b
+            c' = simplify c
+            d' = simplify d
+        in if a == c
+        then a' :.: simplify (b :|: d)
+--        else if b == d
+--        then simplify (a :|: c) :.: b'
+        else (a' :.: b') :|: (c' :.: d')
+
+    -- passthrough
     r1 :|: r2 -> simplify r1 :|: simplify r2
     r1 :.: r2 -> simplify r1 :|: simplify r2
     Star r -> Star (simplify r)
