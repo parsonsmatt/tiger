@@ -18,6 +18,7 @@ dependencies:
   - base >=4.7 && <5
   - mtl
   - lens
+  - array
   - transformers
 
 library:
@@ -26,6 +27,8 @@ library:
   build-tools:
     - alex
     - happy
+  other-modules:
+      - Exercises.Ch2.TigerScanner
 
 tests:
   doctest:
