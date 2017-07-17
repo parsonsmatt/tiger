@@ -1,5 +1,5 @@
 {
-module Exercises.Ch2.TigerScanner (main) where
+module Exercises.Ch2.TigerScanner where
 
 import qualified Data.ByteString.Lazy.Char8 as C8
 }

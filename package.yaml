@@ -30,6 +30,7 @@ library:
     - happy
   other-modules:
       - Exercises.Ch2.TigerScanner
+      - Exercises.Ch3.TigerParser
 
 tests:
   doctest:
