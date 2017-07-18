@@ -13,6 +13,7 @@ tokens :-
 
   $white+                       ;
   "//".*                        ;
+  \;                            { \p _ -> T p Semicolon       }
   let                           { \p _ -> T p Let             }
   in                            { \p _ -> T p In              }
   while                         { \p _ -> T p While           }
@@ -102,6 +103,7 @@ data TokenTy
     | Ampersand
     | Pipe
     | Assignment
+    | Semicolon
     deriving (Eq, Show)
 
 data Token = T AlexPosn TokenTy
