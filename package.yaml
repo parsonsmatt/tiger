@@ -21,6 +21,10 @@ dependencies:
   - lens
   - array
   - transformers
+  - containers
+  - lens
+  - mtl
+  - transformers
 
 library:
   source-dirs: src

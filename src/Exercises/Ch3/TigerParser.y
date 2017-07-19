@@ -1,10 +1,12 @@
 -- vim: ft=happy
 {
+{-# GHC_OPTIONS -fno-warn #-}
 module Exercises.Ch3.TigerParser where
 
 import Exercises.Ch2.TigerScanner (Token(..), TokenTy)
 import qualified Exercises.Ch2.TigerScanner as Tok
 import Data.ByteString.Lazy (ByteString)
+import Data.String
 }
 
 %name parse
@@ -72,15 +74,15 @@ Decs : {- empty -} { []      }
      | Decs Dec    { $2 : $1 }
 
 Dec :: { Decl }
-Dec : TypeDec  { TyDec $1  }
+Dec : TypeDec  { $1  }
     | VarDec   { VarDec $1 }
     | FunDec   { FunDec $1 }
 
-TypeDec :: { TypeDecl }
-TypeDec : type ident '=' Type { TypeDecl (typeIdent $2) $4 }
+TypeDec :: { Decl }
+TypeDec : type ident '=' Type { TyDec (Ident $2) $4 }
 
-Type :: { Type }
-Type : ident          { TypeName (typeIdent $1) }
+Type :: { TypeP }
+Type : ident          { TypeName (Ident $1) }
      | TyFields       { TypeFields $1                   }
      | array of ident { TypeArray (Ident $3)            }
 
@@ -93,19 +95,19 @@ TyFields1 : {- empty -}           { []      }
           | ',' TyField TyFields1 { $2 : $3 }
 
 TyField :: { TypeField }
-TyField : ident ':' ident { TypeField (Ident $1) (typeIdent $3) }
+TyField : ident ':' ident { TypeField (Ident $1) (Ident $3) }
 
 VarDec :: { VarDecl }
-VarDec : var ident OptAnn ':=' Expr { VarDecl (Ident $2) $3 $5 }
+VarDec : var ident OptAnn ':=' Expr { mkVarDecl (Ident $2) $3 $5 }
 
 FunDec :: { FunDecl }
 FunDec : function ident '(' TyFields ')' OptAnn '=' Expr { case $6 of
        Just ty -> Func (Ident $2) $4 ty $8 
        Nothing -> Proc (Ident $2) $4 $8 }
 
-OptAnn :: { Maybe TypeIdent }
+OptAnn :: { Maybe Ident }
 OptAnn : {- empty -} { Nothing             }
-       | ':' ident   { Just (typeIdent $2) }
+       | ':' ident   { Just (Ident $2) }
 
 LValue :: { LValue }
 LValue : ident { LIdent (Ident $1) }
@@ -122,9 +124,33 @@ Expr : let Decs in Expr { ELet $2 $4 }
      | '(' Exprs ')' { ESeq $2 }
      | int { EInt $1 }
      | str { EStr $1 }
-     | NEG Expr  { ENeg $2 }
-     | Expr BinOp Expr { BinOp $1 $2 $3 }
-     | ident '{' RecAssns '}' { ERecCreate (typeIdent $1) $3 }
+     | ident BraceExpr { $2 $1 }
+     | NEG Expr  { BinOp (EInt 0) (ArithOp OMinus) $2 }
+     | Expr BinOp Expr { case $2 of
+        Left b ->
+            case b of
+                OOr -> EIfElse $1 (EInt 1) $3
+                OAnd -> EIfElse $1 $3 (EInt 0)
+        Right a -> 
+            BinOp $1 a $3 
+        }
+     | LValue ':=' Expr { EAssign $1 $3 }
+     | if Expr then Expr MElse { case $5 of
+            Nothing -> EIf $2 $4 
+            Just e  -> EIfElse $2 $4 e }
+     | while Expr do Expr { EWhile $2 $4 }
+     | for ident ':=' Expr to Expr do Expr { EFor EscYes (Ident $2) $4 $6 $8 }
+     | break { EBreak }
+
+BraceExpr :: { ByteString -> Expr }
+BraceExpr : '(' FunArgs ')' { \i -> FunCall (Ident i) $2 }
+           | '[' RecAssns ']' { \i -> ERecCreate (Ident i) $2 }
+           | '[' Expr ']' of Expr { \i -> EArrCreate (Ident i) $2 $5 }
+
+MElse :: { Maybe Expr }
+MElse : { Nothing }
+      | else Expr { Just $2 }
+    
 
 RecAssns :: { [RecAssn] }
 RecAssns :                   { [] }
@@ -137,37 +163,51 @@ RecAssns1 :: { [RecAssn] }
 RecAssns1 : ',' RecAssn RecAssns1 { $2 : $3 }
           |                       { [] }
 
-BinOp :: { Op }
-BinOp : '+' { ArithOp OPlus }
-      | '-' { ArithOp OMinus }
-      | '*' { ArithOp OTimes }
-      | '/' { ArithOp ODivide }
-      | '=' { CompOp OEQ }
-      | '<>' { CompOp ONEQ }
-      | '<'  { CompOp OLT }
-      | '>'  { CompOp OGT }
-      | '<=' { CompOp OLTE }
-      | '>=' { CompOp OGTE }
-      | '&' { BoolOp OAnd }
-      | '|' { BoolOp OOr }
+FunArgs :: { [Expr] }
+FunArgs : { [] }
+        | Expr FunArgs1 { $1 : $2 }
 
--- up next: array creation
-      
+FunArgs1 :: { [Expr] }
+FunArgs1 :  { [] }
+         | ',' Expr FunArgs1 { $2 : $3 }
+
+BinOp :: { Either BoolOp Op }
+BinOp : '+' { Right $ ArithOp OPlus }
+      | '-' { Right $ ArithOp OMinus }
+      | '*' { Right $ ArithOp OTimes }
+      | '/' { Right $ ArithOp ODivide }
+      | '=' { Right $ CompOp OEQ }
+      | '<>' { Right $ CompOp ONEQ }
+      | '<'  { Right $ CompOp OLT }
+      | '>'  { Right $ CompOp OGT }
+      | '<=' { Right $ CompOp OLTE }
+      | '>=' { Right $ CompOp OGTE }
+      | '&' { Left OAnd }
+      | '|' { Left OOr }
+
 {
 
 data Expr 
     = ELet [Decl] Expr
+    | EVar VarDecl
     | ENil
     | ESeq [Expr]
     | EInt Int
     | EStr ByteString
-    | ENeg Expr
     | BinOp Expr Op Expr
-    | ERecCreate TypeIdent [RecAssn]
+    | ERecCreate Ident [RecAssn]
+    | FunCall Ident [Expr]
+    | EArrCreate Ident Expr Expr
+    | EAssign LValue Expr
+    | EIfElse Expr Expr Expr
+    | EIf Expr Expr
+    | EWhile Expr Expr
+    | EFor Escape Ident Expr Expr Expr
+    | EBreak
 
 data RecAssn = RecAssn Ident Expr
 
-data Op = CompOp CompOp | ArithOp ArithOp | BoolOp BoolOp
+data Op = CompOp CompOp | ArithOp ArithOp
 
 data BoolOp = OAnd | OOr
 
@@ -177,17 +217,13 @@ data ArithOp = OPlus | OMinus | OTimes | ODivide
 
 happyError _ = error "parse error"
 
-typeIdent :: ByteString -> TypeIdent
-typeIdent = TypeIdent . Ident
-
 newtype Ident = Ident { unIdent :: ByteString }
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
-newtype TypeIdent = TypeIdent { unTypeIdent :: Ident }
-    deriving (Eq, Show)
+data Escape = EscYes | EscNo
 
 data Decl
-    = TyDec TypeDecl
+    = TyDec Ident TypeP
     | VarDec VarDecl
     | FunDec FunDecl
 
@@ -197,20 +233,26 @@ data LValue
     | LSubscript LValue Expr
 
 data FunDecl 
-    = Func Ident [TypeField] TypeIdent Expr
+    = Func Ident [TypeField] Ident Expr
     | Proc Ident [TypeField] Expr
 
+mkVarDecl :: Ident -> Maybe Ident -> Expr -> VarDecl
+mkVarDecl = VarDecl EscYes
+
 data VarDecl
-    = VarDecl Ident (Maybe TypeIdent) Expr
+    = VarDecl Escape Ident (Maybe Ident) Expr
 
-data TypeDecl = TypeDecl TypeIdent Type
+data TypeDecl = TypeDecl Ident TypeP
 
-data Type
-    = TypeName TypeIdent
+data TypeP
+    = TypeName Ident
     | TypeFields [TypeField]
     | TypeArray Ident
 
 data TypeField
-    = TypeField Ident TypeIdent
+    = TypeField Ident Ident
+
+instance IsString Ident where
+    fromString = Ident . fromString
 
 }
