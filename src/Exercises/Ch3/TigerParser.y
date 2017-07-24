@@ -1,16 +1,22 @@
 -- vim: ft=happy
 {
 {-# GHC_OPTIONS -fno-warn #-}
-module Exercises.Ch3.TigerParser where
+module Exercises.Ch3.TigerParser 
+    ( parse
+    , module X
+    ) where
 
 import Exercises.Ch2.TigerScanner (Token(..), TokenTy)
 import qualified Exercises.Ch2.TigerScanner as Tok
 import Data.ByteString.Lazy (ByteString)
 import Data.String
+import Language.Tiger.Syntax as X
+import Control.Monad.Except
 }
 
 %name parse
 %tokentype { Token }
+%monad { Either String } { (>>=) } { return }
 
 %token
     let      { T _ Tok.Let          }
@@ -69,9 +75,45 @@ import Data.String
 
 %%
 
+Exprs :: { [Expr] }
+Exprs : {- empty -}     { []      }
+      |  Expr Exprs1 { $1 : $2 }
+
+Exprs1 :: { [Expr] }
+Exprs1 : {- empty -} { [] }
+       | ';' Expr Exprs1 { $2 : $3 }
+
+Expr :: { Expr }
+Expr : let Decs in Expr end { ELet $2 $4 }
+     | nil { ENil }
+     | '(' Exprs ')' { ESeq $2 }
+     | int { EInt $1 }
+     | str { EStr $1 }
+     | ident BraceExpr { $2 $1 }
+     | NEG Expr  { BinOp (EInt 0) (ArithOp OMinus) $2 }
+     | Expr BinOp Expr { case $2 of
+        Left b ->
+            case b of
+                OOr -> EIfElse $1 (EInt 1) $3
+                OAnd -> EIfElse $1 $3 (EInt 0)
+        Right a -> 
+            BinOp $1 a $3 
+        }
+     | LValue ':=' Expr { EAssign $1 $3 }
+     | if Expr then Expr MElse { case $5 of
+            Nothing -> EIf $2 $4 
+            Just e  -> EIfElse $2 $4 e }
+     | while Expr do Expr { EWhile $2 $4 }
+     | for ident ':=' Expr to Expr do Expr { EFor EscYes (Ident $2) $4 $6 $8 }
+     | break { EBreak }
+
 Decs :: { [Decl] }
 Decs : {- empty -} { []      }
-     | Decs Dec    { $2 : $1 }
+     | Decs1 Dec    { $2 : $1 }
+
+Decs1 :: { [Decl] }
+Decs1 : {- empty -} { [] }
+      | Decs1 Dec ';' { $2 : $1 }
 
 Dec :: { Decl }
 Dec : TypeDec  { $1  }
@@ -113,34 +155,6 @@ LValue :: { LValue }
 LValue : ident { LIdent (Ident $1) }
        | LValue '.' ident { LDot $1 (Ident $3) }
        | LValue '[' Expr ']' { LSubscript $1 $3 }
-
-Exprs :: { [Expr] }
-Exprs : {- empty -}     { []      }
-      |  Expr ';' Exprs { $1 : $3 }
-
-Expr :: { Expr }
-Expr : let Decs in Expr { ELet $2 $4 }
-     | nil { ENil }
-     | '(' Exprs ')' { ESeq $2 }
-     | int { EInt $1 }
-     | str { EStr $1 }
-     | ident BraceExpr { $2 $1 }
-     | NEG Expr  { BinOp (EInt 0) (ArithOp OMinus) $2 }
-     | Expr BinOp Expr { case $2 of
-        Left b ->
-            case b of
-                OOr -> EIfElse $1 (EInt 1) $3
-                OAnd -> EIfElse $1 $3 (EInt 0)
-        Right a -> 
-            BinOp $1 a $3 
-        }
-     | LValue ':=' Expr { EAssign $1 $3 }
-     | if Expr then Expr MElse { case $5 of
-            Nothing -> EIf $2 $4 
-            Just e  -> EIfElse $2 $4 e }
-     | while Expr do Expr { EWhile $2 $4 }
-     | for ident ':=' Expr to Expr do Expr { EFor EscYes (Ident $2) $4 $6 $8 }
-     | break { EBreak }
 
 BraceExpr :: { ByteString -> Expr }
 BraceExpr : '(' FunArgs ')' { \i -> FunCall (Ident i) $2 }
@@ -187,72 +201,9 @@ BinOp : '+' { Right $ ArithOp OPlus }
 
 {
 
-data Expr 
-    = ELet [Decl] Expr
-    | EVar VarDecl
-    | ENil
-    | ESeq [Expr]
-    | EInt Int
-    | EStr ByteString
-    | BinOp Expr Op Expr
-    | ERecCreate Ident [RecAssn]
-    | FunCall Ident [Expr]
-    | EArrCreate Ident Expr Expr
-    | EAssign LValue Expr
-    | EIfElse Expr Expr Expr
-    | EIf Expr Expr
-    | EWhile Expr Expr
-    | EFor Escape Ident Expr Expr Expr
-    | EBreak
+happyError = parseError
 
-data RecAssn = RecAssn Ident Expr
-
-data Op = CompOp CompOp | ArithOp ArithOp
-
-data BoolOp = OAnd | OOr
-
-data CompOp = OEQ | OGT | OGTE | OLT | OLTE | ONEQ
-
-data ArithOp = OPlus | OMinus | OTimes | ODivide
-
-happyError _ = error "parse error"
-
-newtype Ident = Ident { unIdent :: ByteString }
-    deriving (Eq, Ord, Show)
-
-data Escape = EscYes | EscNo
-
-data Decl
-    = TyDec Ident TypeP
-    | VarDec VarDecl
-    | FunDec FunDecl
-
-data LValue 
-    = LIdent Ident
-    | LDot LValue Ident
-    | LSubscript LValue Expr
-
-data FunDecl 
-    = Func Ident [TypeField] Ident Expr
-    | Proc Ident [TypeField] Expr
-
-mkVarDecl :: Ident -> Maybe Ident -> Expr -> VarDecl
-mkVarDecl = VarDecl EscYes
-
-data VarDecl
-    = VarDecl Escape Ident (Maybe Ident) Expr
-
-data TypeDecl = TypeDecl Ident TypeP
-
-data TypeP
-    = TypeName Ident
-    | TypeFields [TypeField]
-    | TypeArray Ident
-
-data TypeField
-    = TypeField Ident Ident
-
-instance IsString Ident where
-    fromString = Ident . fromString
-
+parseError :: [Token] -> Either String a
+parseError (l:ls) = throwError (show l)
+parseError [] = throwError "Unexpected end of Input"
 }

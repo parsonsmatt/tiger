@@ -16,14 +16,16 @@ extra-source-files:
 
 dependencies:
   - base >=4.7 && <5
-  - mtl
-  - bytestring
-  - lens
   - array
-  - transformers
+  - bytestring
   - containers
   - lens
+  - lens
   - mtl
+  - mtl
+  - template-haskell
+  - th-lift-instances
+  - transformers
   - transformers
 
 library:
@@ -45,3 +47,4 @@ tests:
     - tiger
     - hspec
     - QuickCheck
+    - Glob

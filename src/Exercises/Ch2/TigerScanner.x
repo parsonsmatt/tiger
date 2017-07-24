@@ -8,6 +8,9 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 
 $digit = 0-9                      -- digits
 $alpha = [a-zA-Z]                -- alphabetic characters
+$graphic    = $printable # $white
+ 
+@string     = \" (. # \")* \"
 
 tokens :-
 
@@ -55,7 +58,7 @@ tokens :-
   \:\=                          { \p _ -> T p Assignment      }
   $digit+                       { \p s -> T p (LitInt (read (C8.unpack s))) }
   $alpha [$alpha $digit \_ \']* { \p s -> T p (Ident s)         }
-  "\"".*"\""                    { \p s -> T p (LitStr s) }
+  @string                       { \p s -> T p (LitStr (C8.tail . C8.init $ s)) }
 
 {
 
@@ -106,10 +109,14 @@ data TokenTy
     | Semicolon
     deriving (Eq, Show)
 
-data Token = T AlexPosn TokenTy
-    deriving (Eq, Show)
+data Token = T 
+    { tokenPosn :: AlexPosn
+    , tokenTy :: TokenTy
+    } deriving (Eq, Show)
 
 main = do
-  s <- getContents
-  print (alexScanTokens (C8.pack s))
+  s <- C8.getContents
+  print (alexScanTokens s)
+
+lexFromFile = fmap alexScanTokens . C8.readFile
 }
