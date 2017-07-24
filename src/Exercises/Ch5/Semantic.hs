@@ -129,6 +129,10 @@ typeCheckExpr = \case
             for_ decs typeCheckDecl
             typeCheckExpr expr
 
+what :: IO ()
+what = do
+
+    _ "huh"
 
 setAndReturnType :: Symbol -> Type -> TypeChecker Type
 setAndReturnType s t = do
