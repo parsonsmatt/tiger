@@ -86,7 +86,8 @@ Exprs1 : {- empty -} { [] }
 Expr :: { Expr }
 Expr : let Decs in Expr end { ELet $2 $4 }
      | nil { ENil }
-     | '(' Exprs ')' { ESeq $2 }
+     | Exprs { ESeq $1 }
+     | '(' Expr ')' { $2 }
      | int { EInt $1 }
      | str { EStr $1 }
      | ident BraceExpr { $2 $1 }
@@ -106,6 +107,7 @@ Expr : let Decs in Expr end { ELet $2 $4 }
      | while Expr do Expr { EWhile $2 $4 }
      | for ident ':=' Expr to Expr do Expr { EFor EscYes (Ident $2) $4 $6 $8 }
      | break { EBreak }
+     | LValue { ELValue $1 }
 
 Decs :: { [Decl] }
 Decs : {- empty -} { []      }
@@ -113,7 +115,7 @@ Decs : {- empty -} { []      }
 
 Decs1 :: { [Decl] }
 Decs1 : {- empty -} { [] }
-      | Decs1 Dec ';' { $2 : $1 }
+      | Decs1 Dec { $2 : $1 }
 
 Dec :: { Decl }
 Dec : TypeDec  { $1  }
@@ -125,11 +127,15 @@ TypeDec : type ident '=' Type { TyDec (Ident $2) $4 }
 
 Type :: { TypeP }
 Type : ident          { TypeName (Ident $1) }
-     | TyFields       { TypeFields $1                   }
+     | TyFieldsBraces       { TypeFields $1                   }
      | array of ident { TypeArray (Ident $3)            }
 
-TyFields :: { [TypeField] }
-TyFields : {- empty -}               { []      }
+TyFieldsParens :: { [TypeField] }
+TyFieldsParens : '(' ')' { [] }
+               | '(' TyField TyFields1 ')' { $2 : $3 }
+
+TyFieldsBraces :: { [TypeField] }
+TyFieldsBraces : {- empty -}               { []      }
          | '{' TyField TyFields1 '}' { $2 : $3 }
 
 TyFields1 :: { [TypeField] }
@@ -143,9 +149,9 @@ VarDec :: { VarDecl }
 VarDec : var ident OptAnn ':=' Expr { mkVarDecl (Ident $2) $3 $5 }
 
 FunDec :: { FunDecl }
-FunDec : function ident '(' TyFields ')' OptAnn '=' Expr { case $6 of
-       Just ty -> Func (Ident $2) $4 ty $8 
-       Nothing -> Proc (Ident $2) $4 $8 }
+FunDec : function ident TyFieldsParens OptAnn '=' Expr { case $4 of
+       Just ty -> Func (Ident $2) $3 ty $6 
+       Nothing -> Proc (Ident $2) $3 $6 }
 
 OptAnn :: { Maybe Ident }
 OptAnn : {- empty -} { Nothing             }
@@ -158,7 +164,7 @@ LValue : ident { LIdent (Ident $1) }
 
 BraceExpr :: { ByteString -> Expr }
 BraceExpr : '(' FunArgs ')' { \i -> FunCall (Ident i) $2 }
-           | '[' RecAssns ']' { \i -> ERecCreate (Ident i) $2 }
+           | '{' RecAssns '}' { \i -> ERecCreate (Ident i) $2 }
            | '[' Expr ']' of Expr { \i -> EArrCreate (Ident i) $2 $5 }
 
 MElse :: { Maybe Expr }

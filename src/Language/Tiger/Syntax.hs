@@ -10,6 +10,7 @@ import           Language.Haskell.TH.Syntax
 data Expr
     = ELet [Decl] Expr
     | EVar VarDecl
+    | ELValue LValue
     | ENil
     | ESeq [Expr]
     | EInt Int

@@ -33,7 +33,7 @@ tigerp = QuasiQuoter
 parseTigerToExpr :: String -> Q Exp
 parseTigerToExpr str = do
     let lexed = Lexer.alexScanTokens (C8.pack str)
-        parsed = parse lexed
+        Right parsed = parse lexed
     [| parsed|]
 
 lexTigerToExpr :: String -> Q Exp
