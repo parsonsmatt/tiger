@@ -90,8 +90,6 @@ Expr : let Decs in Expr end { ELet $2 $4 }
      | '(' Expr ')' { $2 }
      | int { EInt $1 }
      | str { EStr $1 }
-     | LValue ':=' Expr { EAssign $1 $3 }
-     | ident BraceExpr { $2 $1 }
      | NEG Expr  { BinOp (EInt 0) (ArithOp OMinus) $2 }
      | Expr BinOp Expr { case $2 of
         Left b ->
@@ -107,6 +105,9 @@ Expr : let Decs in Expr end { ELet $2 $4 }
      | while Expr do Expr { EWhile $2 $4 }
      | for ident ':=' Expr to Expr do Expr { EFor EscYes (Ident $2) $4 $6 $8 }
      | break { EBreak }
+     -- factor out ident ???? stuff
+     | ident BraceExpr { $2 $1 }
+     | LValue ':=' Expr { EAssign $1 $3 }
      | LValue { ELValue $1 }
 
 Decs :: { [Decl] }
