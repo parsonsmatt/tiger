@@ -60,9 +60,14 @@ spec = do
                     isRight
 
         it "can parse an lvalue" $ do
-            parseFromByteString "let var d:=0 in d[3] end"
+            parseFromByteString "let in d[3] end"
                 `shouldBe`
                     Right
-                        [ELet
-                            [VarDec $ mkVarDecl "d" Nothing (EInt 0)]
-                            (ELValue (LSubscript (LIdent "d") (EInt 3)))]
+                        [ELet [] (ELValue (LSubscript (LIdent "d") (EInt 3)))]
+
+        it "can assign to an array" $ do
+            parseFromByteString "d[0] := 1"
+                `shouldBe`
+                    Right
+                        [ EAssign (LSubscript (LIdent "d") (EInt 0)) (EInt 1)
+                        ]

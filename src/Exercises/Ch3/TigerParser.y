@@ -90,6 +90,7 @@ Expr : let Decs in Expr end { ELet $2 $4 }
      | '(' Expr ')' { $2 }
      | int { EInt $1 }
      | str { EStr $1 }
+     | LValue ':=' Expr { EAssign $1 $3 }
      | ident BraceExpr { $2 $1 }
      | NEG Expr  { BinOp (EInt 0) (ArithOp OMinus) $2 }
      | Expr BinOp Expr { case $2 of
@@ -100,7 +101,6 @@ Expr : let Decs in Expr end { ELet $2 $4 }
         Right a -> 
             BinOp $1 a $3 
         }
-     | LValue ':=' Expr { EAssign $1 $3 }
      | if Expr then Expr MElse { case $5 of
             Nothing -> EIf $2 $4 
             Just e  -> EIfElse $2 $4 e }
@@ -126,9 +126,9 @@ TypeDec :: { Decl }
 TypeDec : type ident '=' Type { TyDec (Ident $2) $4 }
 
 Type :: { TypeP }
-Type : ident          { TypeName (Ident $1) }
-     | TyFieldsBraces       { TypeFields $1                   }
-     | array of ident { TypeArray (Ident $3)            }
+Type : ident          { TypeName (Ident $1)  }
+     | TyFieldsBraces { TypeFields $1        }
+     | array of ident { TypeArray (Ident $3) }
 
 TyFieldsParens :: { [TypeField] }
 TyFieldsParens : '(' ')' { [] }
@@ -163,9 +163,15 @@ LValue : ident { LIdent (Ident $1) }
        | LValue '[' Expr ']' { LSubscript $1 $3 }
 
 BraceExpr :: { ByteString -> Expr }
-BraceExpr : '(' FunArgs ')' { \i -> FunCall (Ident i) $2 }
-           | '{' RecAssns '}' { \i -> ERecCreate (Ident i) $2 }
-           | '[' Expr ']' of Expr { \i -> EArrCreate (Ident i) $2 $5 }
+BraceExpr : '(' FunArgs ')'         { \i -> FunCall (Ident i) $2 }
+           | '{' RecAssns '}'       { \i -> ERecCreate (Ident i) $2 }
+           | '[' Expr ']' OptOfExpr { \i -> case $4 of
+                Nothing -> ELValue (LSubscript (LIdent (Ident i)) $2)
+                Just expr -> EArrCreate (Ident i) $2 expr }
+
+OptOfExpr :: { Maybe Expr }
+OptOfExpr : {- empty -} { Nothing }
+          | of Expr     { Just $2 }
 
 MElse :: { Maybe Expr }
 MElse : { Nothing }
