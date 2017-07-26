@@ -25,6 +25,7 @@ data Expr
     | EWhile Expr Expr
     | EFor Escape Ident Expr Expr Expr
     | EBreak
+    | EUnit
     deriving (Eq, Show, Lift)
 
 data RecAssn

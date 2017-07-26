@@ -59,7 +59,6 @@ import Control.Monad.Except
     '>=' { T _ Tok.AtLeast }
     '&' { T _ Tok.Ampersand }
     '|' { T _ Tok.Pipe }
-    NEG { T _ Tok.SubSym }
 
     int   { T _ (Tok.LitInt $$) }
     str   { T _ (Tok.LitStr $$) }
@@ -71,7 +70,6 @@ import Control.Monad.Except
 %nonassoc '<' '>' '<>' '=' '<=' '>='
 %left '+' '-'
 %left '*' '/'
-%left NEG
 
 %%
 
@@ -84,14 +82,17 @@ Exprs1 : {- empty -} { [] }
        | ';' Expr Exprs1 { $2 : $3 }
 
 Expr :: { Expr }
-Expr : let Decs in Expr end { ELet $2 $4 }
-     | nil { ENil }
-     | Exprs { ESeq $1 }
-     | '(' Expr ')' { $2 }
-     | int { EInt $1 }
-     | str { EStr $1 }
-     | NEG Expr  { BinOp (EInt 0) (ArithOp OMinus) $2 }
-     | Expr BinOp Expr { case $2 of
+Expr : let Decs in Exprs end { ELet $2 (ESeq $4) }
+     | if Expr then Expr MElse { case $5 of
+            Nothing -> EIf $2 $4 
+            Just e  -> EIfElse $2 $4 e }
+     | while Expr do Expr { EWhile $2 $4 }
+     | for ident ':=' Expr to Expr do Expr { EFor EscYes (Ident $2) $4 $6 $8 }
+     | '-' Expr  { BinOp (EInt 0) (ArithOp OMinus) $2 }
+     | Term { $1 }
+
+Term :: { Expr }
+Term : Term BinOp Term { case $2 of
         Left b ->
             case b of
                 OOr -> EIfElse $1 (EInt 1) $3
@@ -99,16 +100,47 @@ Expr : let Decs in Expr end { ELet $2 $4 }
         Right a -> 
             BinOp $1 a $3 
         }
-     | if Expr then Expr MElse { case $5 of
-            Nothing -> EIf $2 $4 
-            Just e  -> EIfElse $2 $4 e }
-     | while Expr do Expr { EWhile $2 $4 }
-     | for ident ':=' Expr to Expr do Expr { EFor EscYes (Ident $2) $4 $6 $8 }
      | break { EBreak }
-     -- factor out ident ???? stuff
-     | ident BraceExpr { $2 $1 }
-     | LValue ':=' Expr { EAssign $1 $3 }
-     | LValue { ELValue $1 }
+     | int { EInt $1 }
+     | str { EStr $1 }
+     | nil { ENil }
+     | ident IdentFollower  { $2 $1 }
+     | '(' Paren1 { $2 }
+
+Paren1 :: { Expr }
+Paren1 : Exprs ')' { ESeq $1 }
+       | ')'       { EUnit }
+
+IdentFollower :: { ByteString -> Expr }
+IdentFollower : LFollower { \i -> $1 (LIdent (Ident i)) }
+              | '(' FunArgs ')' { \i -> FunCall (Ident i) $2 }
+              | '[' Expr ']' of Expr { \i -> EArrCreate (Ident i) $2 $5  }
+              | '{' RecFields '}' { \i -> ERecCreate (Ident i) $2 }
+
+RecFields :: { [RecAssn] }
+RecFields : {- empty -} { [] }
+          | RecAssn RecFields1 { $1 : $2 }
+
+RecAssn :: { RecAssn }
+RecAssn : ident '=' Expr { RecAssn (Ident $1) $3 }
+
+RecFields1 :: { [RecAssn] }
+RecFields1 : {- empty -} { [] }
+           | ',' RecAssn RecFields1 { $2 : $3 }
+
+LFollower :: { LValue -> Expr }
+LFollower : {- -} { \l -> ELValue l }
+          | '.' ident LFollower { \l -> $3 (LDot l (Ident $2)) }
+          | '[' Expr ']' LFollower { \l -> $4 (LSubscript l $2) }
+          | ':=' Expr { \l -> EAssign l $2 }
+
+FunArgs :: { [Expr] }
+FunArgs : {- empty -} { [] }
+        | Expr FunArgs1 { $1 : $2 }
+
+FunArgs1 :: { [Expr] }
+FunArgs1 : {- empty -}       { [] }
+         | ',' Expr FunArgs1 { $2 : $3 }
 
 Decs :: { [Decl] }
 Decs : {- empty -} { []      }
@@ -136,8 +168,8 @@ TyFieldsParens : '(' ')' { [] }
                | '(' TyField TyFields1 ')' { $2 : $3 }
 
 TyFieldsBraces :: { [TypeField] }
-TyFieldsBraces : {- empty -}               { []      }
-         | '{' TyField TyFields1 '}' { $2 : $3 }
+TyFieldsBraces : '{' '}'                   { []      }
+               | '{' TyField TyFields1 '}' { $2 : $3 }
 
 TyFields1 :: { [TypeField] }
 TyFields1 : {- empty -}           { []      }
@@ -158,46 +190,10 @@ OptAnn :: { Maybe Ident }
 OptAnn : {- empty -} { Nothing             }
        | ':' ident   { Just (Ident $2) }
 
-LValue :: { LValue }
-LValue : ident { LIdent (Ident $1) }
-       | LValue '.' ident { LDot $1 (Ident $3) }
-       | LValue '[' Expr ']' { LSubscript $1 $3 }
-
-BraceExpr :: { ByteString -> Expr }
-BraceExpr : '(' FunArgs ')'         { \i -> FunCall (Ident i) $2 }
-           | '{' RecAssns '}'       { \i -> ERecCreate (Ident i) $2 }
-           | '[' Expr ']' OptOfExpr { \i -> case $4 of
-                Nothing -> ELValue (LSubscript (LIdent (Ident i)) $2)
-                Just expr -> EArrCreate (Ident i) $2 expr }
-
-OptOfExpr :: { Maybe Expr }
-OptOfExpr : {- empty -} { Nothing }
-          | of Expr     { Just $2 }
-
 MElse :: { Maybe Expr }
-MElse : { Nothing }
+MElse :           { Nothing }
       | else Expr { Just $2 }
     
-
-RecAssns :: { [RecAssn] }
-RecAssns :                   { [] }
-         | RecAssn RecAssns1 { $1 : $2 }
-
-RecAssn :: { RecAssn }
-RecAssn : ident '=' Expr { RecAssn (Ident $1) $3 }
-
-RecAssns1 :: { [RecAssn] }
-RecAssns1 : ',' RecAssn RecAssns1 { $2 : $3 }
-          |                       { [] }
-
-FunArgs :: { [Expr] }
-FunArgs : { [] }
-        | Expr FunArgs1 { $1 : $2 }
-
-FunArgs1 :: { [Expr] }
-FunArgs1 :  { [] }
-         | ',' Expr FunArgs1 { $2 : $3 }
-
 BinOp :: { Either BoolOp Op }
 BinOp : '+' { Right $ ArithOp OPlus }
       | '-' { Right $ ArithOp OMinus }
